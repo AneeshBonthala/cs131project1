@@ -9,10 +9,30 @@ class Interpreter(InterpreterBase):
     # for testing purposes
     def print(self, program):
         ast = parse_program(program)
-        return ast.dict['functions'][0].dict['statements']
+        return ast
+
+    def eval_expr(self, expr):
+        if expr.elem_type == 'int' or expr.elem_type == 'string':
+            return expr.dict['val']
+        elif expr.elem_type == 'var':
+            return self.variables[expr.dict['name']]
+        elif expr.elem_type == '+':
+            return self.eval_expr(expr.dict['op1']) + self.eval_expr(expr.dict['op2'])
+        elif expr.elem_type == '-':
+            return self.eval_expr(expr.dict['op1']) - self.eval_expr(expr.dict['op2'])
+
+    def run_assignment(self, statement):
+        self.variables[statement.dict['name']] = self.eval_expr(statement.dict['expression'])
+        print(self.variables)
+
+    def run_function(statement):
+        pass
 
     def run_statement(self, statement):
-        pass
+        if statement.elem_type == '=':
+            self.run_assignment(statement)
+        elif statement.elem_type == 'fcall':
+            self.run_function(statement)
 
     def run(self, program):
         self.variables = {}
@@ -25,14 +45,14 @@ class Interpreter(InterpreterBase):
 
 
 
-
-
     
+def test():
+    inter = Interpreter()
+    with open('test.txt') as test:
+        prog = test.read()
 
-inter = Interpreter()
-with open('test.txt') as test:
-    prog = test.read()
+    with open('test.txt', 'a') as test:
+        test.write('\n')
+        test.write(str(inter.run(prog)))
 
-with open('test.txt', 'a') as test:
-    test.write('\n')
-    test.write(str(inter.print(prog)))
+test()
