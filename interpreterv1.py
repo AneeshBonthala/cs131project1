@@ -5,6 +5,7 @@ class Interpreter(InterpreterBase):
 
     def __init__(self, console_output = True, inp = None, trace_output = False):
         super().__init__(console_output, inp)
+        self.variables = {}
 
     # for testing purposes
     def print(self, program):
@@ -13,20 +14,28 @@ class Interpreter(InterpreterBase):
 
     def eval_expr(self, expr):
         if expr.elem_type == 'int' or expr.elem_type == 'string':
-            return expr.dict['val']
+            return expr.get('val')
         elif expr.elem_type == 'var':
-            return self.variables[expr.dict['name']]
+            return self.variables[expr.get('name')]
         elif expr.elem_type == '+':
-            return self.eval_expr(expr.dict['op1']) + self.eval_expr(expr.dict['op2'])
+            return self.eval_expr(expr.get('op1')) + self.eval_expr(expr.get('op2'))
         elif expr.elem_type == '-':
-            return self.eval_expr(expr.dict['op1']) - self.eval_expr(expr.dict['op2'])
+            return self.eval_expr(expr.get('op1')) - self.eval_expr(expr.get('op2'))
+        elif expr.elem_type == 'fcall':
+            return self.run_function(expr)
 
     def run_assignment(self, statement):
-        self.variables[statement.dict['name']] = self.eval_expr(statement.dict['expression'])
-        print(self.variables)
+        self.variables[statement.get('name')] = self.eval_expr(statement.get('expression'))
 
-    def run_function(statement):
-        pass
+    def run_function(self, statement):
+        args = statement.get('args')
+        if statement.get('name') == 'inputi':
+            # handle incorrect # or type of args error
+            super().output(args[0])
+            return super().get_input()
+        elif statement.get('name') == 'print':
+            # handle incorrect # or type of args error
+            super().output(args[0])
 
     def run_statement(self, statement):
         if statement.elem_type == '=':
@@ -35,10 +44,9 @@ class Interpreter(InterpreterBase):
             self.run_function(statement)
 
     def run(self, program):
-        self.variables = {}
         ast = parse_program(program)
-        main_node = ast.dict['functions'][0]
-        for statement in main_node.dict['statements']:
+        main_node = ast.get('functions')[0]
+        for statement in main_node.get('statements'):
             self.run_statement(statement)
 
 
