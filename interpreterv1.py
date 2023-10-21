@@ -29,7 +29,7 @@ class Interpreter(InterpreterBase):
             if var not in self.variables.keys(): self.error_not_found(var)
             return self.variables[var]
         
-        if expr.elem_type == 'fcall':
+        if elem_type == 'fcall':
             return self.run_function(expr)
         
         else:
