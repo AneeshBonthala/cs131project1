@@ -1,5 +1,6 @@
 from brewparse import parse_program
 from intbase import InterpreterBase, ErrorType
+from element import Element
 
 class Interpreter(InterpreterBase):
 
@@ -22,7 +23,7 @@ class Interpreter(InterpreterBase):
         elem_type = expr.elem_type
 
         if elem_type == 'int' or elem_type == 'string':
-            return expr.get('val')
+            return expr
         
         if elem_type == 'var':
             var = expr.get('name')
@@ -40,8 +41,8 @@ class Interpreter(InterpreterBase):
             try:
                 op1 = self.eval_expr(expr.get('op1'))
                 op2 = self.eval_expr(expr.get('op2'))
-                result = op_dict[elem_type](op1, op2)
-            except TypeError: self.error_types(type(op1), type(op2))
+                result = Element(op1.elem_type, val = (op_dict[elem_type](op1.get('val'), op2.get('val'))))
+            except TypeError: self.error_types(op1.elem_type, op2.elem_type)
             else: return result
         
 
@@ -57,14 +58,14 @@ class Interpreter(InterpreterBase):
             if len(args) > 1: self.error_args('inputi')
             if len(args) == 1:
                 prompt = self.eval_expr(args[0])
-                if not isinstance(prompt, str): self.error_args('inputi', 'type')
-                super().output(prompt)
-            return int(super().get_input())
+                if prompt.elem_type != 'string': self.error_args('inputi', 'type')
+                super().output(prompt.get('val'))
+            return Element('int', val = int(super().get_input())) #You may assume that only valid integers will be entered in response to an inputi() prompt and do NOT need to test for non-integer values being entered
         
         if name == 'print':
             result = ''
             for arg in args:
-                eval_arg = self.eval_expr(arg)
+                eval_arg = self.eval_expr(arg).get('val')
                 result += str(eval_arg)
             super().output(result)
 
@@ -74,11 +75,9 @@ class Interpreter(InterpreterBase):
     def run_statement(self, statement):
         elem_type = statement.elem_type
 
-        if elem_type == '=':
-            self.run_assignment(statement)
+        if elem_type == '=': self.run_assignment(statement)
 
-        elif elem_type == 'fcall':
-            self.run_function(statement)
+        elif elem_type == 'fcall': self.run_function(statement)
 
 
     def run(self, program):
