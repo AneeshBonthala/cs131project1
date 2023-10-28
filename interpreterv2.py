@@ -106,9 +106,7 @@ class Interpreter(InterpreterBase):
     def run_function(self, statement):
         name = statement.get('name')
         args = statement.get('args')
-        statements = statement.get('statements')
         
-
         if name == 'inputi':
             if len(args) > 1: self.error_args('inputi')
             if len(args) == 1:
@@ -230,8 +228,8 @@ class Interpreter(InterpreterBase):
 
     def run_statement(self, statement):
         elem_type = statement.elem_type
-        if elem_type == '=': return self.run_assignment(statement)
-        elif elem_type == 'fcall': return self.run_function(statement)
+        if elem_type == '=': self.run_assignment(statement)
+        elif elem_type == 'fcall': self.run_function(statement)
         elif elem_type == 'if': return self.run_if(statement)
         elif elem_type == 'while': return self.run_while(statement)
         elif elem_type == 'return': return self.run_return(statement)
