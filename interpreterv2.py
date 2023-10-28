@@ -143,52 +143,98 @@ class Interpreter(InterpreterBase):
         else:
             if (name, len(args)) not in self.variables:
                 self.error_not_found(name, 'function')
-            self.define_function(self.variables[(name, len(args))], args)
+            return self.define_function(self.variables[(name, len(args))], args)
 
 
-    # def define_function(self, func, args):
-    #     for statement in func.get('statements'):
-    #         self.run_statement(statement)
-        
-
-    def run_if(self, statement):
-        condition_true = self.eval_expr(statement.get('condition')).get('val')
-        else_statements = statement.get('else_statements')
+    def define_function(self, func, args):
+        params = func.get('args')
+        save_vals = {}
         before_len = len(self.variables.keys())
         start_of_scope = None
 
-        if condition_true:
-            for s in statement.get('statements'):
-                self.run_statement(s)
-                if start_of_scope is None and before_len != len(self.variables.keys()):
-                    start_of_scope = len(self.variables.keys()) - 1
-        elif else_statements:
-            for s in else_statements:
-                self.run_statement(s)
-                if start_of_scope is None and before_len != len(self.variables.keys()):
-                    start_of_scope = len(self.variables.keys()) - 1
+        for i in range(len(args)):
+            param_name = params[i].get('name')
+            if param_name in self.variables: 
+                save_vals[param_name] = self.variables[param_name]
+            self.variables[param_name] = self.eval_expr(args[i])
+            if start_of_scope is None and before_len != len(self.variables.keys()):
+                start_of_scope = len(self.variables.keys()) - 1
+
+        for statement in func.get('statements'):
+            ret = self.run_statement(statement)
+            if ret is not None: break
+
+        for key, val in save_vals.items():
+            self.variables[key] = val
         
         self.garbage_collection(start_of_scope)
+        return ret
+
+
+
+    def run_if(self, statement):
+        condition = self.eval_expr(statement.get('condition'))
+        condition_true = condition.get('val')
+        # If the expression/variable/value that is the condition of the if statement does not evaluate to a boolean, you must generate an error of type ErrorType.TYPE_ERROR by calling InterpreterBase.error().
+        if condition_true != True and condition_true != False: self.error_types('if', condition.elem_type)
+        else_statements = statement.get('else_statements')
+        before_len = len(self.variables.keys())
+        start_of_scope = None
+        ret = None
+
+        if condition_true:
+            for s in statement.get('statements'):
+                ret = self.run_statement(s)
+                if start_of_scope is None and before_len != len(self.variables.keys()):
+                    start_of_scope = len(self.variables.keys()) - 1
+                if ret is not None: break
+        elif else_statements:
+            for s in else_statements:
+                ret = self.run_statement(s)
+                if start_of_scope is None and before_len != len(self.variables.keys()):
+                    start_of_scope = len(self.variables.keys()) - 1
+                if ret is not None: break
+        
+        self.garbage_collection(start_of_scope)
+        return ret
 
         
     def run_while(self, statement):
-        pass
+        condition = self.eval_expr(statement.get('condition'))
+        condition_true = condition.get('val')
+        # If the expression/variable/value that is the condition of the while statement does not evaluate to a boolean, you must generate an error of type ErrorType.TYPE_ERROR by calling InterpreterBase.error().
+        if condition_true != True and condition_true != False: self.error_types('if', condition.elem_type)
+        before_len = len(self.variables.keys())
+        start_of_scope = None
+        ret = None
 
+        if condition_true:
+            for s in statement.get('statements'):
+                ret = self.run_statement(s)
+                if start_of_scope is None and before_len != len(self.variables.keys()):
+                    start_of_scope = len(self.variables.keys()) - 1
+                if ret is not None:
+                    self.garbage_collection(start_of_scope)
+                    return ret
+            self.garbage_collection(start_of_scope)
+            self.run_while(statement)
+        
+        return ret
 
-
-
-
+    
+    def run_return(self, statement):
+        ret = statement.get('expression')
+        if ret is None: return deepcopy(Element('nil'))
+        result = self.eval_expr(ret)
+        return deepcopy(result)
 
     def run_statement(self, statement):
         elem_type = statement.elem_type
-
-        if elem_type == '=': self.run_assignment(statement)
-
-        elif elem_type == 'fcall': self.run_function(statement)
-
-        elif elem_type == 'if': self.run_if(statement)
-
-        elif elem_type == 'while': self.run_while(statement)
+        if elem_type == '=': return self.run_assignment(statement)
+        elif elem_type == 'fcall': return self.run_function(statement)
+        elif elem_type == 'if': return self.run_if(statement)
+        elif elem_type == 'while': return self.run_while(statement)
+        elif elem_type == 'return': return self.run_return(statement)
 
 
     def run(self, program):
@@ -202,21 +248,25 @@ class Interpreter(InterpreterBase):
         if not main_node: self.error_not_found('main', 'function')
 
         for statement in main_node.get('statements'):
-            self.run_statement(statement)
+            ret = self.run_statement(statement)
+            if ret is not None: break
 
 
     def garbage_collection(self, start_of_scope):
         if start_of_scope is None: return
+        keys_to_del = []
         for i in range(len(self.variables.keys())):
             if i >= start_of_scope:
                 key = list(self.variables.keys())[i]
-                del self.variables[key]
+                keys_to_del.append(key)
+        for key in keys_to_del:
+            del self.variables[key]
 
 
-def test():
-    inter = Interpreter()
-    with open('test.txt') as file:
-        prog = file.read()
-    inter.run(prog)
+# def test():
+#     inter = Interpreter()
+#     with open('test.txt') as file:
+#         prog = file.read()
+#     inter.run(prog)
 
-test()
+# test()
