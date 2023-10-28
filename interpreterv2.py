@@ -161,13 +161,14 @@ class Interpreter(InterpreterBase):
 
         for statement in func.get('statements'):
             ret = self.run_statement(statement)
-            if ret is not None: break
+            if ret is not None:
+                break
 
         for key, val in save_vals.items():
             self.variables[key] = val
-        
+
         self.garbage_collection(start_of_scope)
-        return ret
+        return deepcopy(Element('nil')) if ret is None else ret
 
 
 
@@ -190,6 +191,7 @@ class Interpreter(InterpreterBase):
                 if ret is not None: break
         
         self.garbage_collection(start_of_scope)
+
         return ret
 
         
@@ -208,7 +210,7 @@ class Interpreter(InterpreterBase):
                     self.garbage_collection(start_of_scope)
                     return ret
             self.garbage_collection(start_of_scope)
-            self.run_while(statement)
+            return self.run_while(statement)
         
         return ret
 
