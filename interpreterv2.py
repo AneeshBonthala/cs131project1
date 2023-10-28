@@ -84,19 +84,23 @@ class Interpreter(InterpreterBase):
                 elif elem_type == '!=':
                     if op1type != op2type: return true()
                     return true() if op1val != op2val else false()
+                elif elem_type == '||' or elem_type == '&&':
+                    if op1type != 'bool' or op2type != 'bool': self.error_types(op1type, op2type)
+                    dict = {
+                        '||': lambda x, y: true() if x or y else false(),
+                        '&&': lambda x, y: true() if x and y else false()
+                    }
+                    return dict[elem_type](op1val, op2val)
                 else:
                     # It is illegal to compare values of different types with any other comparison operator (e.g., >, <=, etc.). Doing so must result in an error of ErrorType.TYPE_ERROR.
-                    if op1type != op2type: self.error_types(op1type, op2type)
+                    if op1type != 'int' or op2type != 'int': self.error_types(op1type, op2type)
                     dict = {
                         '<': lambda x, y: true() if x < y else false(),
                         '<=': lambda x, y: true() if x <= y else false(),
                         '>': lambda x, y: true() if x > y else false(),
                         '>=': lambda x, y: true() if x >= y else false(),
-                        '||': lambda x, y: true() if x or y else false(),
-                        '&&': lambda x, y: true() if x and y else false()
                     }
                     return dict[elem_type](op1val, op2val)
-        
         
 
     def run_assignment(self, statement):
@@ -114,7 +118,7 @@ class Interpreter(InterpreterBase):
                 if prompt.elem_type != 'string': self.error_args('inputi', 'type')
                 super().output(prompt.get('val'))
             #You may assume that only valid integers will be entered in response to an inputi() prompt and do NOT need to test for non-integer values being entered
-            return Element('int', val = int(super().get_input()))
+            return deepcopy(Element('int', val = int(super().get_input())))
         
         # You must implement the inputs() function which inputs and returns a string as its return value. It must use our InterpreterBase.get_input() method to get input. It may take either one or no parameters
         if name == 'inputs':
@@ -123,7 +127,7 @@ class Interpreter(InterpreterBase):
                 prompt = self.eval_expr(args[0])
                 if prompt.elem_type != 'string': self.error_args('inputs', 'type')
                 super().output(prompt.get('val'))
-            return Element('string', val = super().get_input())
+            return deepcopy(Element('string', val = super().get_input()))
         
         if name == 'print':
             result = ''
@@ -136,7 +140,7 @@ class Interpreter(InterpreterBase):
                 # You will not be tested on printing nil values. In such scenarios, your interpreter may behave in any way you like, and may act in a different way than our solution.
             super().output(result)
             # print() function can be called within expressions. The return value of print() should always be nil.
-            return Element('nil')
+            return deepcopy(Element('nil'))
         
         else:
             if (name, len(args)) not in self.variables:
@@ -147,16 +151,13 @@ class Interpreter(InterpreterBase):
     def define_function(self, func, args):
         params = func.get('args')
         save_vals = {}
-        before_len = len(self.variables.keys())
-        start_of_scope = None
+        start_of_scope = len(self.variables.keys())
 
         for i in range(len(args)):
             param_name = params[i].get('name')
             if param_name in self.variables: 
                 save_vals[param_name] = self.variables[param_name]
             self.variables[param_name] = self.eval_expr(args[i])
-            if start_of_scope is None and before_len != len(self.variables.keys()):
-                start_of_scope = len(self.variables.keys()) - 1
 
         for statement in func.get('statements'):
             ret = self.run_statement(statement)
@@ -176,21 +177,16 @@ class Interpreter(InterpreterBase):
         # If the expression/variable/value that is the condition of the if statement does not evaluate to a boolean, you must generate an error of type ErrorType.TYPE_ERROR by calling InterpreterBase.error().
         if condition_true != True and condition_true != False: self.error_types('if', condition.elem_type)
         else_statements = statement.get('else_statements')
-        before_len = len(self.variables.keys())
-        start_of_scope = None
+        start_of_scope = len(self.variables.keys())
         ret = None
 
         if condition_true:
             for s in statement.get('statements'):
                 ret = self.run_statement(s)
-                if start_of_scope is None and before_len != len(self.variables.keys()):
-                    start_of_scope = len(self.variables.keys()) - 1
                 if ret is not None: break
         elif else_statements:
             for s in else_statements:
                 ret = self.run_statement(s)
-                if start_of_scope is None and before_len != len(self.variables.keys()):
-                    start_of_scope = len(self.variables.keys()) - 1
                 if ret is not None: break
         
         self.garbage_collection(start_of_scope)
@@ -202,15 +198,12 @@ class Interpreter(InterpreterBase):
         condition_true = condition.get('val')
         # If the expression/variable/value that is the condition of the while statement does not evaluate to a boolean, you must generate an error of type ErrorType.TYPE_ERROR by calling InterpreterBase.error().
         if condition_true != True and condition_true != False: self.error_types('if', condition.elem_type)
-        before_len = len(self.variables.keys())
-        start_of_scope = None
+        start_of_scope = len(self.variables.keys())
         ret = None
 
         if condition_true:
             for s in statement.get('statements'):
                 ret = self.run_statement(s)
-                if start_of_scope is None and before_len != len(self.variables.keys()):
-                    start_of_scope = len(self.variables.keys()) - 1
                 if ret is not None:
                     self.garbage_collection(start_of_scope)
                     return ret
@@ -251,7 +244,6 @@ class Interpreter(InterpreterBase):
 
 
     def garbage_collection(self, start_of_scope):
-        if start_of_scope is None: return
         keys_to_del = []
         for i in range(len(self.variables.keys())):
             if i >= start_of_scope:
