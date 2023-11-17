@@ -28,10 +28,26 @@ class Interpreter(InterpreterBase):
 
         if elem_type == 'var':
             var = expr.get('name')
+
+            # reference assignment
             if var in self.linked_refs:
                 return self.variables[self.linked_refs[var]]
+            
+            # function assignment
+            func_name = None
+            for key in self.variables.keys():
+                if isinstance(key, tuple) and key[0] == var:
+                    if func_name:
+                        self.error_not_found(var)
+                    func_name = key
+            if func_name:
+                return self.variables[func_name]
+
+            # variable does not exist
             if var not in self.variables:
                 self.error_not_found(var)
+
+            # regular assignment
             return self.variables[var]
         
         if elem_type == 'fcall':
@@ -158,11 +174,16 @@ class Interpreter(InterpreterBase):
     def run_assignment(self, statement):
         name = statement.get('name')
         expr = statement.get('expression')
+        val = self.eval_expr(expr)
+
+        # storing a function in a variable
+        if val.elem_type == 'func':
+            self.linked_refs[name] = (val.get('name'), len(val.get('args')))
 
         if name in self.linked_refs:
             name = self.linked_refs[name]
-        
-        self.variables[name] = self.eval_expr(expr)
+
+        self.variables[name] = val
 
 
     def run_function(self, statement):
@@ -201,6 +222,8 @@ class Interpreter(InterpreterBase):
             return deepcopy(Element('nil'))
         
         else:
+            if name in self.linked_refs:
+                return self.define_function(self.variables[self.linked_refs[name]], args)
             if (name, len(args)) not in self.variables:
                 self.error_not_found(name, 'function')
             return self.define_function(self.variables[(name, len(args))], args)
@@ -210,6 +233,7 @@ class Interpreter(InterpreterBase):
         params = func.get('args')
         save_vals = {}
         start_of_scope = len(self.variables.keys())
+        start_of_scope_2 = len(self.linked_refs.keys())
 
         for i in range(len(args)):
             param_name = params[i].get('name')
@@ -238,8 +262,7 @@ class Interpreter(InterpreterBase):
         for key, val in save_vals.items():
             self.variables[key] = val
 
-        self.linked_refs.clear()
-
+        self.refs_garbage_collection(start_of_scope_2)
         self.garbage_collection(start_of_scope)
         return deepcopy(Element('nil')) if ret is None else ret
 
@@ -307,11 +330,16 @@ class Interpreter(InterpreterBase):
 
     def run_statement(self, statement):
         elem_type = statement.elem_type
-        if elem_type == '=': self.run_assignment(statement)
-        elif elem_type == 'fcall': self.run_function(statement)
-        elif elem_type == 'if': return self.run_if(statement)
-        elif elem_type == 'while': return self.run_while(statement)
-        elif elem_type == 'return': return self.run_return(statement)
+        if elem_type == '=':
+            self.run_assignment(statement)
+        elif elem_type == 'fcall':
+            self.run_function(statement)
+        elif elem_type == 'if':
+            return self.run_if(statement)
+        elif elem_type == 'while':
+            return self.run_while(statement)
+        elif elem_type == 'return':
+            return self.run_return(statement)
 
 
     def run(self, program):
@@ -341,6 +369,15 @@ class Interpreter(InterpreterBase):
                 keys_to_del.append(key)
         for key in keys_to_del:
             del self.variables[key]
+
+    def refs_garbage_collection(self, start_of_scope):
+        keys_to_del = []
+        for i in range(len(self.linked_refs.keys())):
+            if i >= start_of_scope:
+                key = list(self.linked_refs.keys())[i]
+                keys_to_del.append(key)
+        for key in keys_to_del:
+            del self.linked_refs[key]
 
 
 def test():
