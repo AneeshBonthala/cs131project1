@@ -17,6 +17,7 @@ class Interpreter(InterpreterBase):
     def __init__(self, console_output = True, inp = None, trace_output = False):
         super().__init__(console_output, inp)
         self.variables = {}
+        self.linked_refs = {}
 
 
     def eval_expr(self, expr):
@@ -27,7 +28,10 @@ class Interpreter(InterpreterBase):
 
         if elem_type == 'var':
             var = expr.get('name')
-            if var not in self.variables.keys(): self.error_not_found(var)
+            if var in self.linked_refs:
+                return self.variables[self.linked_refs[var]]
+            if var not in self.variables:
+                self.error_not_found(var)
             return self.variables[var]
         
         if elem_type == 'fcall':
@@ -42,9 +46,13 @@ class Interpreter(InterpreterBase):
 
         if elem_type == '!':
             op1 = self.eval_expr(expr.get('op1'))
-            # It is illegal to use the logical not operation on non-boolean types. Doing so must result in an error of ErrorType.TYPE_ERROR
-            if op1.elem_type != 'bool': self.error_types('!', op1.elem_type)
-            return Element('bool', val = not op1.get('val'))
+            if op1.elem_type == 'int':
+                condition_true = self.int_to_bool(op1.get('val'))
+            else:
+                condition_true = op1.get('val')
+            if condition_true != True and condition_true != False:
+                self.error_types('!', op1.elem_type)
+            return Element('bool', val = not condition_true)
         
         else:
             op1 = self.eval_expr(expr.get('op1'))
@@ -55,45 +63,84 @@ class Interpreter(InterpreterBase):
             op2type = op2.elem_type
 
             if elem_type == '+':
-                # It is illegal to use arithmetic operations on non-integer types, with the exception of using + to concatenate strings. Doing so must result in an error of ErrorType.TYPE_ERROR.
-                if op1type != 'int' and op1type != 'string':
+                def add(x, y):
+                    return deepcopy(Element('int', val = x + y))
+                
+                # only valid types are int, str, bool
+                if op1type != 'int' and op1type != 'string' and op1type != 'bool':
                     self.error_types(op1type, op2type)
-                if op2type != 'int' and op2type != 'string':
+                if op2type != 'int' and op2type != 'string' and op2type !='bool':
                     self.error_types(op1type, op2type)
+                
+                # only valid add of two non-identical types is int + bool
+                if op1type == 'bool' and op2type == 'int':
+                    return add(self.bool_to_int(op1val) + op2val)
+                if op1type == 'int' and op2type == 'bool':
+                    return add(op1val + self.bool_to_int(op2val))
                 if op1type != op2type:
                     self.error_types(op1type, op2type)
-                return Element(op1type, val = op1val + op2val)
+                
+                # not using add func in case of str + str
+                return deepcopy(Element(op1type, val = op1val + op2val))
+            
             elif elem_type == '-' or elem_type == '*' or elem_type == '/':
-                if op1type != 'int' or op2type != 'int':
-                    self.error_types(op1type, op2type)
                 dict = {
                     '-': lambda x, y: x - y,
                     '*': lambda x, y: x * y,
-                    # Division of integers must result in a truncated integer result, like using a // b with Python
-                    # You need not handle division by zero errors. Should such a division occur your interpreter can have undefined behavior, including behaviors that are different from our solution
                     '/': lambda x, y: x // y
                 }
-                return Element('int', val = dict[elem_type](op1val, op2val))
+                
+                # only valid -*/ of two non-identical types is int:bool
+                if op1type == 'bool' and op2type == 'int':
+                    return deepcopy(Element('int', val = dict[elem_type](self.bool_to_int(op1val), op2val)))
+                if op1type == 'int' and op2type == 'bool':
+                    return deepcopy(Element('int', val = dict[elem_type](op1val, self.bool_to_int(op2val))))
+
+                # otherwise, must be only ints
+                if op1type != 'int' or op2type != 'int':
+                    self.error_types(op1type, op2type)
+                
+                return deepcopy(Element('int', val = dict[elem_type](op1val, op2val)))
+            
             else:
-                def true(): return deepcopy(Element('bool', val = True))
-                def false(): return deepcopy(Element('bool', val = False))
+                def true():
+                    return deepcopy(Element('bool', val = True))
+                def false():
+                    return deepcopy(Element('bool', val = False))
                 if elem_type == '==':
-                # It is legal to compare values of different types to each other with == and !=. If two values are of different types, then must treat them as not equal. This includes comparing any value to nil.
-                    if op1type != op2type: return false()
+                    # Integers with a value of zero are always converted to false | All non-zero values are converted to true
+                    if op1type == 'bool' and op2type == 'int':
+                        return true() if self.int_to_bool(op2val) and op1val else false()
+                    if op1type == 'int' and op2type == 'bool':
+                        return true() if self.int_to_bool(op1val) and op2val else false()
+                    # It is legal to compare values of different types to each other with == and !=. At this point, if two values are of different types, then must treat them as not equal. This includes comparing any value to nil.
+                    if op1type != op2type:
+                        return false()
                     return true() if op1val == op2val else false()
                 elif elem_type == '!=':
-                    if op1type != op2type: return true()
+                    if op1type == 'bool' and op2type == 'int':
+                        return true() if self.int_to_bool(op2val) and op1val else false()
+                    if op1type == 'int' and op2type == 'bool':
+                        return true() if self.int_to_bool(op1val) and op2val else false()
+                    if op1type != op2type:
+                        return true()
                     return true() if op1val != op2val else false()
                 elif elem_type == '||' or elem_type == '&&':
-                    if op1type != 'bool' or op2type != 'bool': self.error_types(op1type, op2type)
                     dict = {
                         '||': lambda x, y: true() if x or y else false(),
                         '&&': lambda x, y: true() if x and y else false()
                     }
+                    if op1type == 'bool' and op2type == 'int':
+                        return dict[elem_type](op1val, self.int_to_bool(op2val))
+                    if op1type == 'int' and op2type == 'bool':
+                        return dict[elem_type](self.int_to_bool(op1val), op2val)
+                    if op1type != 'bool' or op2type != 'bool':
+                        self.error_types(op1type, op2type)
                     return dict[elem_type](op1val, op2val)
                 else:
                     # It is illegal to compare values of different types with any other comparison operator (e.g., >, <=, etc.). Doing so must result in an error of ErrorType.TYPE_ERROR.
-                    if op1type != 'int' or op2type != 'int': self.error_types(op1type, op2type)
+                    if op1type != 'int' or op2type != 'int':
+                        self.error_types(op1type, op2type)
                     dict = {
                         '<': lambda x, y: true() if x < y else false(),
                         '<=': lambda x, y: true() if x <= y else false(),
@@ -101,10 +148,21 @@ class Interpreter(InterpreterBase):
                         '>=': lambda x, y: true() if x >= y else false(),
                     }
                     return dict[elem_type](op1val, op2val)
-        
+
+    def int_to_bool(val):
+        return False if val == 0 else True
+
+    def bool_to_int(val):
+        return 1 if val else 0
 
     def run_assignment(self, statement):
-        self.variables[statement.get('name')] = self.eval_expr(statement.get('expression'))
+        name = statement.get('name')
+        expr = statement.get('expression')
+
+        if name in self.linked_refs:
+            name = self.linked_refs[name]
+        
+        self.variables[name] = self.eval_expr(expr)
 
 
     def run_function(self, statement):
@@ -155,9 +213,22 @@ class Interpreter(InterpreterBase):
 
         for i in range(len(args)):
             param_name = params[i].get('name')
-            if param_name in self.variables: 
-                save_vals[param_name] = self.variables[param_name]
-            self.variables[param_name] = self.eval_expr(args[i])
+
+            # value arguments
+            if params[i].elem_type == 'arg':
+                if param_name in self.variables:
+                    save_vals[param_name] = self.variables[param_name]
+                self.variables[param_name] = self.eval_expr(args[i])
+
+            # reference arguments
+            if params[i].elem_type == 'refarg':
+                # if the arg is not a variable, treat it as a normal arg
+                if args[i].elem_type != 'var':
+                    self.variables[param_name] = self.eval_expr(args[i])
+                else:
+                    self.linked_refs[param_name] = args[i].get('name')
+                
+
 
         for statement in func.get('statements'):
             ret = self.run_statement(statement)
@@ -167,6 +238,8 @@ class Interpreter(InterpreterBase):
         for key, val in save_vals.items():
             self.variables[key] = val
 
+        self.linked_refs.clear()
+
         self.garbage_collection(start_of_scope)
         return deepcopy(Element('nil')) if ret is None else ret
 
@@ -174,9 +247,13 @@ class Interpreter(InterpreterBase):
 
     def run_if(self, statement):
         condition = self.eval_expr(statement.get('condition'))
-        condition_true = condition.get('val')
         # If the expression/variable/value that is the condition of the if statement does not evaluate to a boolean, you must generate an error of type ErrorType.TYPE_ERROR by calling InterpreterBase.error().
-        if condition_true != True and condition_true != False: self.error_types('if', condition.elem_type)
+        if condition.elem_type == 'int':
+            condition_true = self.int_to_bool(condition.get('val'))
+        else:
+            condition_true = condition.get('val')
+        if condition_true != True and condition_true != False:
+            self.error_types('if', condition.elem_type)
         else_statements = statement.get('else_statements')
         start_of_scope = len(self.variables.keys())
         ret = None
@@ -184,11 +261,13 @@ class Interpreter(InterpreterBase):
         if condition_true:
             for s in statement.get('statements'):
                 ret = self.run_statement(s)
-                if ret is not None: break
+                if ret is not None:
+                    break
         elif else_statements:
             for s in else_statements:
                 ret = self.run_statement(s)
-                if ret is not None: break
+                if ret is not None:
+                    break
         
         self.garbage_collection(start_of_scope)
 
@@ -197,9 +276,13 @@ class Interpreter(InterpreterBase):
         
     def run_while(self, statement):
         condition = self.eval_expr(statement.get('condition'))
-        condition_true = condition.get('val')
+        if condition.elem_type == 'int':
+            condition_true = self.int_to_bool(condition.get('val'))
+        else:
+            condition_true = condition.get('val')
         # If the expression/variable/value that is the condition of the while statement does not evaluate to a boolean, you must generate an error of type ErrorType.TYPE_ERROR by calling InterpreterBase.error().
-        if condition_true != True and condition_true != False: self.error_types('if', condition.elem_type)
+        if condition_true != True and condition_true != False:
+            self.error_types('while', condition.elem_type)
         start_of_scope = len(self.variables.keys())
         ret = None
 
@@ -217,7 +300,8 @@ class Interpreter(InterpreterBase):
     
     def run_return(self, statement):
         ret = statement.get('expression')
-        if ret is None: return deepcopy(Element('nil'))
+        if ret is None:
+            return deepcopy(Element('nil'))
         result = self.eval_expr(ret)
         return deepcopy(result)
 
@@ -235,14 +319,18 @@ class Interpreter(InterpreterBase):
 
         main_node = None
         for func in ast.get('functions'):
-            if func.get('name') == 'main': main_node = func
+            if func.get('name') == 'main':
+                main_node = func
             # You may overload a function, defining multiple versions of it that take different numbers of parameters
-            else: self.variables[(func.get('name'), len(func.get('args')))] = func
-        if not main_node: self.error_not_found('main', 'function')
+            else:
+                self.variables[(func.get('name'), len(func.get('args')))] = func
+        if not main_node:
+            self.error_not_found('main', 'function')
 
         for statement in main_node.get('statements'):
             ret = self.run_statement(statement)
-            if ret is not None: break
+            if ret is not None:
+                break
 
 
     def garbage_collection(self, start_of_scope):
@@ -255,10 +343,10 @@ class Interpreter(InterpreterBase):
             del self.variables[key]
 
 
-# def test():
-#     inter = Interpreter()
-#     with open('test.txt') as file:
-#         prog = file.read()
-#     inter.run(prog)
+def test():
+    inter = Interpreter()
+    with open('test.txt') as file:
+        prog = file.read()
+    inter.run(prog)
 
-# test()
+test()
