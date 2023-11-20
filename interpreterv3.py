@@ -106,7 +106,7 @@ class Interpreter(InterpreterBase):
     
     def __get_function(self, func_name, num_args):
         if func_name not in self.functions:
-            super().error(ErrorType.NAME_ERROR, f"Function {func_name} was not found.")
+            super().error(ErrorType.TYPE_ERROR, f"Function {func_name} was not found.")
         if num_args not in self.functions[func_name]:
             super().error(ErrorType.NAME_ERROR, f"Function {func_name} taking {num_args} arguments was not found.")
         return self.functions[func_name][num_args]
