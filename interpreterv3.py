@@ -154,6 +154,8 @@ class Interpreter(InterpreterBase):
                 num_args = len(alias.value().get('args'))
             if alias.type() == 'lambda':
                 return self.__run_lambda(alias, args)
+            # else:
+            #     super().error(ErrorType.TYPE_ERROR, f"Variable is not of function type.")
 
         func = self.__get_function(name, num_args)
         params = func.get('args')
@@ -173,6 +175,8 @@ class Interpreter(InterpreterBase):
         closure = lambda_func.value().closure
         func = lambda_func.value().func
         params = func.get('args')
+        if len(params) != len(args):
+            super().error(ErrorType.TYPE_ERROR, f"Invalid number of arguments provided to lambda function.")
         for p, a in zip(params, args):
             param_name = p.get('name')
             if p.elem_type == 'refarg' and a.elem_type == 'var':
