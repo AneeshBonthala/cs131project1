@@ -27,6 +27,9 @@ class Environment:
     def push(self):
         self.env.append({})
 
+    def push_closure(self, closure):
+        self.env.append(closure)
+
     def pop(self):
         self.env.pop()
 
@@ -46,7 +49,16 @@ class Value:
     
     def set_type(self, type):
         self.t = type
-    
+
+class Lambda:
+    def __init__(self, env, func):
+        closure = {}
+        for scope in env:
+            closure.update(scope)
+        self.closure = closure
+        self.func = func
+
+
 
 class Interpreter(InterpreterBase):
 
@@ -122,9 +134,11 @@ class Interpreter(InterpreterBase):
         val = self.__eval_expr(expr)
         self.env.set(symbol, val.value(), val.type())
 
+
     def __run_function(self, statement):
         name = statement.get('name')
         args = statement.get('args')
+        num_args = len(args)
 
         if name == 'inputi':
             return self.__call_inputi(args)
@@ -133,7 +147,15 @@ class Interpreter(InterpreterBase):
         if name == 'print':
             return self.__call_print(args)
         
-        func = self.__get_function(name, len(args))
+        alias = self.env.get(name)
+        if alias:
+            if alias.type() == 'func':
+                name = alias.value()
+                num_args = list(self.functions[name].keys())[0]
+            if alias.type() == 'lambda':
+                return self.__run_lambda(alias, args)
+
+        func = self.__get_function(name, num_args)
         params = func.get('args')
         self.env.push()
         for p, a in zip(params, args):
@@ -143,6 +165,22 @@ class Interpreter(InterpreterBase):
             else:
                 arg_val = deepcopy(self.__eval_expr(a))
             self.env.create(param_name, arg_val)
+        return_val = self.__run_statements(func.get('statements'))
+        self.env.pop()
+        return return_val
+    
+    def __run_lambda(self, lambda_func, args):
+        closure = lambda_func.value().closure
+        func = lambda_func.value().func
+        params = func.get('args')
+        for p, a in zip(params, args):
+            param_name = p.get('name')
+            if p.elem_type == 'refarg' and a.elem_type == 'var':
+                arg_val = self.__eval_expr(a)
+            else:
+                arg_val = deepcopy(self.__eval_expr(a))
+            closure[param_name] = arg_val
+        self.env.push_closure(closure)
         return_val = self.__run_statements(func.get('statements'))
         self.env.pop()
         return return_val
@@ -164,10 +202,17 @@ class Interpreter(InterpreterBase):
         
         if elem_type == 'var':
             var_name = expr.get('name')
+            if var_name in self.functions:
+                if len(self.functions[var_name].keys()) > 1:
+                    super().error(ErrorType.NAME_ERROR, "Cannot return or assign overloaded function name.")
+                return Value('func', var_name)
             val = self.env.get(var_name)
             if val is None:
                 super().error(ErrorType.NAME_ERROR, f"Variable {var_name} was not found.")
             return val
+        
+        if elem_type == 'lambda':
+            return Value('lambda', Lambda(deepcopy(self.env.env), expr))
 
         if elem_type == 'neg' or elem_type == '!':
             op1 = self.__eval_expr(expr.get('op1'))
@@ -180,49 +225,40 @@ class Interpreter(InterpreterBase):
         
 
     def __run_if(self, statement):
-        condition = self.__eval_expr(statement.get('condition'))
-        if condition.elem_type == 'int':
-            true = self.int_to_bool(condition.get('val'))
-        else:
-            true = condition.get('val')
-        if true != True and true != False:
-            self.error_types('if', condition.elem_type)
-
+        condition = self.__eval_expr(statement.get('condition')).value()
+        condition = self.__to_bool(condition)
+        if condition is None:
+            super().error(ErrorType.TYPE_ERROR, "Incorrect condition type for 'if' statement.")
         else_statements = statement.get('else_statements')
-        self.env.add_scope(self.env.get_scope_copy())
-        if true:
+        self.env.push()
+        return_val = None
+        if condition:
             return_val = self.__run_statements(statement.get('statements'))
         elif else_statements:
             return_val = self.__run_statements(else_statements) 
-        self.env.del_scope()
+        self.env.pop()
         return return_val
     
-
     def __run_while(self, statement):
-        self.env.add_scope(self.env.get_scope_copy())
-        def loop():
-            condition = self.__eval_expr(statement.get('condition'))
-            if condition.elem_type == 'int':
-                true = self.int_to_bool(condition.get('val'))
-            else:
-                true = condition.get('val')
-            if true != True and true != False:
-                self.error_types('while', condition.elem_type)
-            if true:
-                return_val = self.__run_statements(statement.get('statements'))
-                if return_val:
-                    return return_val
-                else:
-                    return loop()
-        return_val = loop()
-        self.env.del_scope()
+        condition = self.__eval_expr(statement.get('condition')).value()
+        condition = self.__to_bool(condition)
+        if condition is None:
+            super().error(ErrorType.TYPE_ERROR, "Incorrect condition type for 'while' statement.")
+        return_val = None
+        if condition:
+            self.env.push()
+            return_val = self.__run_statements(statement.get('statements'))
+            if return_val:
+                self.env.pop()
+                return return_val
+            self.env.pop()
+            self.__run_while(statement)
         return return_val
 
-    
     def __run_return(self, statement):
         return_val = statement.get('expression')
         if return_val is None:
-            return Element('nil')
+            return Value('nil', None)
         result = self.__eval_expr(return_val)
         return deepcopy(result)
 
@@ -332,10 +368,10 @@ class Interpreter(InterpreterBase):
             
 
 
-def test():
-    inter = Interpreter()
-    with open('test.txt') as file:
-        prog = file.read()
-    inter.run(prog)
+# def test():
+#     inter = Interpreter()
+#     with open('test.txt') as file:
+#         prog = file.read()
+#     inter.run(prog)
 
-test()
+# test()
