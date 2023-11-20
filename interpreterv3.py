@@ -106,7 +106,7 @@ class Interpreter(InterpreterBase):
     
     def __get_function(self, func_name, num_args):
         if func_name not in self.functions:
-            super().error(ErrorType.TYPE_ERROR, f"Function {func_name} was not found.")
+            super().error(ErrorType.NAME_ERROR, f"Function {func_name} was not found.")
         if num_args not in self.functions[func_name]:
             super().error(ErrorType.NAME_ERROR, f"Function {func_name} taking {num_args} arguments was not found.")
         return self.functions[func_name][num_args]
@@ -152,10 +152,10 @@ class Interpreter(InterpreterBase):
             if alias.type() == 'func':
                 name = alias.value().get('name')
                 num_args = len(alias.value().get('args'))
-            if alias.type() == 'lambda':
+            elif alias.type() == 'lambda':
                 return self.__run_lambda(alias, args)
-            # else:
-            #     super().error(ErrorType.TYPE_ERROR, f"Variable is not of function type.")
+            else:
+                super().error(ErrorType.TYPE_ERROR, f"Variable is not callable.")
 
         func = self.__get_function(name, num_args)
         params = func.get('args')
