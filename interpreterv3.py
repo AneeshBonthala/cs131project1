@@ -159,6 +159,8 @@ class Interpreter(InterpreterBase):
 
         func = self.__get_function(name, num_args)
         params = func.get('args')
+        if len(params) != len(args):
+            super().error(ErrorType.TYPE_ERROR, f"Invalid number of arguments provided to function.")
         self.env.push()
         for p, a in zip(params, args):
             param_name = p.get('name')
@@ -356,7 +358,7 @@ class Interpreter(InterpreterBase):
             if prompt.type() != 'string':
                 super().error(ErrorType.TYPE_ERROR, "Invalid argument type provided for 'inputs' function.")
             super().output(prompt.value())
-        return Value('int', int(super().get_input()))
+        return Value('string', super().get_input())
     
     def __call_print(self, args):
         result = ''
