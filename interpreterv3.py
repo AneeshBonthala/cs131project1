@@ -150,8 +150,8 @@ class Interpreter(InterpreterBase):
         alias = self.env.get(name)
         if alias:
             if alias.type() == 'func':
-                name = alias.value()
-                num_args = list(self.functions[name].keys())[0]
+                name = alias.value().get('name')
+                num_args = len(alias.value().get('args'))
             if alias.type() == 'lambda':
                 return self.__run_lambda(alias, args)
 
@@ -205,7 +205,7 @@ class Interpreter(InterpreterBase):
             if var_name in self.functions:
                 if len(self.functions[var_name].keys()) > 1:
                     super().error(ErrorType.NAME_ERROR, "Cannot return or assign overloaded function name.")
-                return Value('func', var_name)
+                return Value('func', list(self.functions[var_name].values())[0])
             val = self.env.get(var_name)
             if val is None:
                 super().error(ErrorType.NAME_ERROR, f"Variable {var_name} was not found.")
@@ -267,7 +267,7 @@ class Interpreter(InterpreterBase):
 
     def __unary_ops(self, op, opval, optype):
         if op == 'neg':
-            if optype() != 'int':
+            if optype != 'int':
                 super().error(ErrorType.TYPE_ERROR, f"Non-integer value cannot be negated with '-'.")
             return Value('int', -1 * opval)
         # op == '!':
@@ -317,7 +317,7 @@ class Interpreter(InterpreterBase):
             op1val = self.__to_bool(op1val)
             op2val = self.__to_bool(op2val)
             if op1val is None or op2val is None:
-                super().error(ErrorType.TYPE_ERROR, f"Incompatible types for '||' operation.")
+                super().error(ErrorType.TYPE_ERROR, f"Incompatible types for {op} operation.")
             dict = {
                 '||': lambda x, y: x or y,
                 '&&': lambda x, y: x and y
