@@ -171,7 +171,7 @@ class Interpreter(InterpreterBase):
             self.env.create(param_name, arg_val)
         return_val = self.__run_statements(func.get('statements'))
         self.env.pop()
-        return return_val
+        return return_val if return_val is not None else Value('nil', None)
     
     def __run_lambda(self, lambda_func, args):
         closure = lambda_func.value().closure
@@ -189,7 +189,7 @@ class Interpreter(InterpreterBase):
         self.env.push_closure(closure)
         return_val = self.__run_statements(func.get('statements'))
         self.env.pop()
-        return return_val
+        return return_val if return_val is not None else Value('nil', None)
     
     def __eval_expr(self, expr):
         elem_type = expr.elem_type
@@ -374,10 +374,10 @@ class Interpreter(InterpreterBase):
             
 
 
-# def test():
-#     inter = Interpreter()
-#     with open('test.txt') as file:
-#         prog = file.read()
-#     inter.run(prog)
+def test():
+    inter = Interpreter()
+    with open('test.txt') as file:
+        prog = file.read()
+    inter.run(prog)
 
-# test()
+test()
