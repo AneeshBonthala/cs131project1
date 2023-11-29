@@ -58,6 +58,19 @@ class Lambda:
         self.closure = closure
         self.func = func
 
+class Object:
+    def __init__(self):
+        self.fields = {}
+
+    def get(self, symbol):
+        if symbol in self.fields:
+            return self.fields[symbol]
+        return None
+    
+    def set(self, symbol, type, value):
+        self.fields[symbol] = Value(type, value)
+    
+
 
 
 class Interpreter(InterpreterBase):
@@ -130,9 +143,27 @@ class Interpreter(InterpreterBase):
 
     def __run_assignment(self, statement):
         symbol = statement.get('name')
+        # handle objects
+        if '.' in symbol:
+            self.__run_field_assignment(statement)
+            return
         expr = statement.get('expression')
         val = self.__eval_expr(expr)
         self.env.set(symbol, val.value(), val.type())
+
+    def __run_field_assignment(self, statement):
+        symbol = statement.get('name')
+        obj_name, field_name = symbol.split('.')
+        # get the value node holding the object
+        obj = self.env.get(obj_name)
+        if obj is None or obj.type() != 'object':
+            super().error(ErrorType.TYPE_ERROR, "Attempting to assign a field to a non-object.")
+        # get the object node
+        obj = obj.value()
+        expr = statement.get('expression')
+        val = self.__eval_expr(expr)
+        # set object's fields
+        obj.set(field_name, val.type(), val.value())
 
 
     def __run_function(self, statement):
@@ -208,10 +239,27 @@ class Interpreter(InterpreterBase):
         
         if elem_type == 'var':
             var_name = expr.get('name')
+
+            if '.' in var_name:
+                obj_name, field_name = var_name.split('.')
+                # get the value node holding the object
+                obj = self.env.get(obj_name)
+                if obj is None or obj.type() != 'object':
+                    super().error(ErrorType.TYPE_ERROR, "Attempting to access a field on a non-object.")
+                # get the object node:
+                obj = obj.value()
+                # get the particular field of the object:
+                field = obj.get(field_name)
+                if field is None:
+                    super().error(ErrorType.NAME_ERROR, "Attempting to access a field that does not exist.")
+                # return the field:
+                return field
+
             if var_name in self.functions:
                 if len(self.functions[var_name].keys()) > 1:
                     super().error(ErrorType.NAME_ERROR, "Cannot return or assign overloaded function name.")
                 return Value('func', list(self.functions[var_name].values())[0])
+            
             val = self.env.get(var_name)
             if val is None:
                 super().error(ErrorType.NAME_ERROR, f"Variable {var_name} was not found.")
@@ -219,6 +267,9 @@ class Interpreter(InterpreterBase):
         
         if elem_type == 'lambda':
             return Value('lambda', Lambda(deepcopy(self.env.env), expr))
+        
+        if elem_type == '@':
+            return Value('object', Object())
 
         if elem_type == 'neg' or elem_type == '!':
             op1 = self.__eval_expr(expr.get('op1'))
