@@ -166,7 +166,9 @@ class Interpreter(InterpreterBase):
         obj_name, field_name = symbol.split('.')
         # get the value node holding the object
         obj = self.env.get(obj_name)
-        if obj is None or obj.type() != 'object':
+        if obj is None:
+            super().error(ErrorType.NAME_ERROR, "Object not found.")
+        if obj.type() != 'object':
             super().error(ErrorType.TYPE_ERROR, "Attempting to assign a field to a non-object.")
         # get the object node
         obj = obj.value()
@@ -224,8 +226,10 @@ class Interpreter(InterpreterBase):
         # in a valid program, we will always know before using 'this' what object is being referred to by 'this', so we assign it here
         else:
             obj = self.env.get(obj_name)
-            if obj is None or obj.type() != 'object':
-                super().error(ErrorType.NAME_ERROR, "Attempting to call a method from a non-object.")
+            if obj is None:
+                super().error(ErrorType.NAME_ERROR, "Object name not found.")
+            if obj.type() != 'object':
+                super().error(ErrorType.TYPE_ERROR, "Attempting to call method from a non-object.")
         obj = obj.value()
         self.env.set('this', obj, 'object')
         
