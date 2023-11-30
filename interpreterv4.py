@@ -69,16 +69,31 @@ class Lambda:
 class Object:
     def __init__(self):
         self.fields = {}
+        self.proto = None
 
     def get(self, symbol):
+        if symbol == 'proto':
+            if self.proto is not None:
+                return self.proto
+            else:
+                return None
         if symbol in self.fields:
             return self.fields[symbol]
+        if self.proto is not None:
+            proto_fields = self.proto.get_fields()
+            if symbol in proto_fields:
+                return proto_fields[symbol]
         return None
     
     def set(self, symbol, type, value):
         self.fields[symbol] = Value(type, value)
-    
 
+    def get_fields(self):
+        return self.fields
+
+    def set_proto(self, proto):
+        self.proto = proto
+        
 
 
 class Interpreter(InterpreterBase):
@@ -174,6 +189,13 @@ class Interpreter(InterpreterBase):
         obj = obj.value()
         expr = statement.get('expression')
         val = self.__eval_expr(expr)
+        if field_name == 'proto':
+            if val.type() == 'nil':
+                return
+            if val.type() != 'object':
+                super().error(ErrorType.TYPE_ERROR, "Attempting to specify non-object as prototype.")
+            obj.set_proto(val.value())
+            return
         # set object's fields
         obj.set(field_name, val.type(), val.value())
 
@@ -471,10 +493,10 @@ class Interpreter(InterpreterBase):
             
 
 
-def test():
-    inter = Interpreter()
-    with open('test.txt') as file:
-        prog = file.read()
-    inter.run(prog)
+# def test():
+#     inter = Interpreter()
+#     with open('test.txt') as file:
+#         prog = file.read()
+#     inter.run(prog)
 
-test()
+# test()
