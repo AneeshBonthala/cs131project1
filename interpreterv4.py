@@ -255,8 +255,8 @@ class Interpreter(InterpreterBase):
                 super().error(ErrorType.NAME_ERROR, "Object name not found.")
             if obj.type() != 'object':
                 super().error(ErrorType.TYPE_ERROR, "Attempting to call method from a non-object.")
+        self.env.create('this', obj)
         obj = obj.value()
-        self.env.set('this', obj, 'object')
         
         method = obj.get(method_name)
         if method is None:
