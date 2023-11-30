@@ -203,7 +203,7 @@ class Interpreter(InterpreterBase):
         obj.set(field_name, val.type(), val.value())
 
 
-    def __run_function(self, statement):
+    def __run_function(self, statement, obj = None):
         name = statement.get('name')
         args = statement.get('args')
         num_args = len(args)
@@ -230,6 +230,8 @@ class Interpreter(InterpreterBase):
         if len(params) != len(args):
             super().error(ErrorType.TYPE_ERROR, f"Invalid number of arguments provided to function.")
         self.env.push()
+        if obj is not None:
+            self.env.create('this', obj)
         for p, a in zip(params, args):
             param_name = p.get('name')
             if p.elem_type == 'refarg' and a.elem_type == 'var':
@@ -255,22 +257,21 @@ class Interpreter(InterpreterBase):
                 super().error(ErrorType.NAME_ERROR, "Object name not found.")
             if obj.type() != 'object':
                 super().error(ErrorType.TYPE_ERROR, "Attempting to call method from a non-object.")
-            self.env.create('this', obj)
-        obj = obj.value()
+        obj_node = obj.value()
         
-        method = obj.get(method_name)
+        method = obj_node.get(method_name)
         if method is None:
             super().error(ErrorType.NAME_ERROR, "Attempting to call a method that does not exist in an object.")
         if method.type() == 'lambda':
             if len(args) != len(method.value().func.get('args')):
                 super().error(ErrorType.NAME_ERROR, "Attempting to call a method with incorrect number of arguments.")
-            return self.__run_lambda(method, args)
+            return self.__run_lambda(method, args, obj)
         if method.type() == 'func':
-            return self.__run_function(method.value())
+            return self.__run_function(method.value(), obj)
         super().error(ErrorType.TYPE_ERROR, "Attempting to call a method in an object which is not a function.")
 
 
-    def __run_lambda(self, lambda_func, args):
+    def __run_lambda(self, lambda_func, args, obj = None):
         closure = lambda_func.value().closure
         func = lambda_func.value().func
         params = func.get('args')
@@ -284,6 +285,8 @@ class Interpreter(InterpreterBase):
                 arg_val = deepcopy(self.__eval_expr(a))
             closure[param_name] = arg_val
         self.env.push_closure(closure)
+        if obj is not None:
+            self.env.create('this', obj)
         return_val = self.__run_statements(func.get('statements'))
         self.env.pop()
         return return_val if return_val is not None else Value('nil', None)
