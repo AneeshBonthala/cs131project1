@@ -79,10 +79,13 @@ class Object:
                 return None
         if symbol in self.fields:
             return self.fields[symbol]
-        if self.proto is not None:
-            proto_fields = self.proto.get_fields()
+        prototype = self.proto
+        while prototype is not None:
+            proto_fields = prototype.get_fields()
             if symbol in proto_fields:
                 return proto_fields[symbol]
+            else:
+                prototype = prototype.proto
         return None
     
     def set(self, symbol, type, value):
