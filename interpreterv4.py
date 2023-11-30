@@ -248,15 +248,11 @@ class Interpreter(InterpreterBase):
         method_name = statement.get('name')
         args = statement.get('args')
 
-        if obj_name == 'this':
-            obj = self.env.get('this')
-        # in a valid program, we will always know before using 'this' what object is being referred to by 'this', so we assign it here
-        else:
-            obj = self.env.get(obj_name)
-            if obj is None:
-                super().error(ErrorType.NAME_ERROR, "Object name not found.")
-            if obj.type() != 'object':
-                super().error(ErrorType.TYPE_ERROR, "Attempting to call method from a non-object.")
+        obj = self.env.get(obj_name)
+        if obj is None:
+            super().error(ErrorType.NAME_ERROR, "Object name not found.")
+        if obj.type() != 'object':
+            super().error(ErrorType.TYPE_ERROR, "Attempting to call method from a non-object.")
         obj_node = obj.value()
         
         method = obj_node.get(method_name)
