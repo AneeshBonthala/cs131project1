@@ -262,16 +262,14 @@ class Interpreter(InterpreterBase):
         if method is None:
             super().error(ErrorType.NAME_ERROR, "Attempting to call a method that does not exist in an object.")
         if method.type() == 'lambda':
+            if len(args) != len(method.value().func.get('args')):
+                super().error(ErrorType.NAME_ERROR, "Attempting to call a method with incorrect number of arguments.")
             return self.__run_lambda(method, args)
         if method.type() == 'func':
             return self.__run_function(method.value())
         super().error(ErrorType.TYPE_ERROR, "Attempting to call a method in an object which is not a function.")
 
-        
-        
 
-        
-    
     def __run_lambda(self, lambda_func, args):
         closure = lambda_func.value().closure
         func = lambda_func.value().func
