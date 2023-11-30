@@ -33,6 +33,17 @@ class Environment:
     def pop(self):
         self.env.pop()
 
+    def get_closure(self):
+        closure = {}
+        for scope in self.env:
+            for key, value in scope.items():
+                if value.type() == 'object' or value.type() == 'lambda':
+                    closure[key] = value
+                else:
+                    closure[key] = deepcopy(value)
+        return closure
+
+
 class Value:
     def __init__(self, type, value):
         self.t = type
@@ -51,10 +62,7 @@ class Value:
         self.t = type
 
 class Lambda:
-    def __init__(self, env, func):
-        closure = {}
-        for scope in env:
-            closure.update(scope)
+    def __init__(self, closure, func):
         self.closure = closure
         self.func = func
 
@@ -132,6 +140,8 @@ class Interpreter(InterpreterBase):
                 self.__run_assignment(s)
             if e == 'fcall':
                 self.__run_function(s)
+            if e == 'mcall':
+                self.__run_method(s)
             if e == 'if':
                 return_val = self.__run_if(s)
             if e == 'while':
@@ -204,6 +214,35 @@ class Interpreter(InterpreterBase):
         self.env.pop()
         return return_val if return_val is not None else Value('nil', None)
     
+    def __run_method(self, statement):
+        obj_name = statement.get('objref')
+        method_name = statement.get('name')
+        args = statement.get('args')
+
+        if obj_name == 'this':
+            obj = self.env.get('this')
+        # in a valid program, we will always know before using 'this' what object is being referred to by 'this', so we assign it here
+        else:
+            obj = self.env.get(obj_name)
+            if obj is None or obj.type() != 'object':
+                super().error(ErrorType.NAME_ERROR, "Attempting to call a method from a non-object.")
+        obj = obj.value()
+        self.env.set('this', obj, 'object')
+        
+        method = obj.get(method_name)
+        if method is None:
+            super().error(ErrorType.NAME_ERROR, "Attempting to call a method that does not exist in an object.")
+        if method.type() == 'lambda':
+            return self.__run_lambda(method, args)
+        if method.type() == 'func':
+            return self.__run_function(method.value())
+        super().error(ErrorType.TYPE_ERROR, "Attempting to call a method in an object which is not a function.")
+
+        
+        
+
+        
+    
     def __run_lambda(self, lambda_func, args):
         closure = lambda_func.value().closure
         func = lambda_func.value().func
@@ -224,9 +263,6 @@ class Interpreter(InterpreterBase):
     
     def __eval_expr(self, expr):
         elem_type = expr.elem_type
-        
-        if elem_type == 'fcall':
-            return self.__run_function(expr)
         
         if elem_type == 'nil':
             return Value('nil', None)
@@ -265,8 +301,14 @@ class Interpreter(InterpreterBase):
                 super().error(ErrorType.NAME_ERROR, f"Variable {var_name} was not found.")
             return val
         
+        if elem_type == 'fcall':
+            return self.__run_function(expr)
+        
+        if elem_type == 'mcall':
+            return self.__run_method(expr)
+
         if elem_type == 'lambda':
-            return Value('lambda', Lambda(deepcopy(self.env.env), expr))
+            return Value('lambda', Lambda(self.env.get_closure(), expr))
         
         if elem_type == '@':
             return Value('object', Object())
